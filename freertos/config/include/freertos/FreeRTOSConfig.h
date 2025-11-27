@@ -14,6 +14,7 @@
 #ifndef __ASSEMBLER__
     /* For configASSERT() */
     #include <assert.h>
+    #include "debug_macros.h"
 #endif /* def __ASSEMBLER__ */
 
 /* ----------------------------------------------------- Helpers -------------------------------------------------------
