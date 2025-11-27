@@ -1,106 +1,116 @@
-#include <Arduino.h>
+#include "esp_timer.h"
+#include "freertos/ringbuf.h"
 #include <Display.h>
-#include <Fonts/FreeMonoBold24pt7b.h>
-#include <GxEPD2_BW.h>
+#include <cstddef>
+#include <cstdint>
+#include <cstdio>
 #include <esp_log.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
-#include <stdio.h>
-#include <Watchy.h>
 
 #define TICKS_PER_MS 1000
+#define TAG "RTOS"
 
-#define BOTTOM_LEFT 26
-#define TOP_LEFT 25
-#define BOTTOM_RIGHT 4
-#define TOP_RIGHT 35
-#define DISPLAY_CS 5
-#define DISPLAY_RES 9
-#define DISPLAY_DC 10
-#define DISPLAY_BUSY 19
+typedef struct {
+  char message[50];
+} Message;
 
-GxEPD2_BW<WatchyDisplay, WatchyDisplay::HEIGHT> display(WatchyDisplay{});
+QueueHandle_t queue;
 
-void initDisplay(void* pvParameters) {
-    ESP_LOGI("initDisplay", "initializing display");
-
-    /* Setting gpio pin types, always necessary at the start. */
-    pinMode(DISPLAY_CS, OUTPUT);
-    pinMode(DISPLAY_RES, OUTPUT);
-    pinMode(DISPLAY_DC, OUTPUT);
-    pinMode(DISPLAY_BUSY, OUTPUT);
-    pinMode(BOTTOM_LEFT, INPUT);
-    pinMode(BOTTOM_RIGHT, INPUT);
-    pinMode(TOP_LEFT, INPUT);
-    pinMode(TOP_RIGHT, INPUT);
-
-    /* Init the display. */
-    display.epd2.initWatchy();
-    display.setFullWindow();
-    display.fillScreen(GxEPD_WHITE);
-    display.setTextColor(GxEPD_BLACK);
-    display.setFont(&FreeMonoBold24pt7b);
-    display.setCursor(0, 90);
-    display.print("Hello\nWorld!");
-    display.display(false);
-
-    /* Delete the display initialization task. */
-    ESP_LOGI("initDisplay", "finished display initialization");
-    vTaskDelete(NULL);
+void sender_task(void *pvParameters) {
+  int period = (uint32_t)pvParameters;
+  TickType_t t = xTaskGetTickCount();
+  Message message;
+  sprintf(message.message, "Sender with %d period", period);
+  while (1) {
+    xQueueSendToBack(queue, &message, 100);
+    vTaskDelayUntil(&t, period);
+  }
 }
 
-void buttonWatch(void* pvParameters) {
-    unsigned int refresh = 0;
-    for (;;) {
-        if (digitalRead(BOTTOM_LEFT) == HIGH) {
-            ESP_LOGI("buttonWatch", "Bottom Left pressed!");
-            display.fillRoundRect(0, 150, 50, 50, 20, GxEPD_BLACK);
-            display.display(true);
-            vTaskDelay(500);
-            display.fillRoundRect(0, 150, 50, 50, 20, GxEPD_WHITE);
-            display.display(true);
-            refresh++;
-        } else if (digitalRead(BOTTOM_RIGHT) == HIGH) {
-            ESP_LOGI("buttonWatch", "Bottom Right pressed!");
-            display.fillRoundRect(150, 150, 50, 50, 20, GxEPD_BLACK);
-            display.display(true);
-            vTaskDelay(500);
-            display.fillRoundRect(150, 150, 50, 50, 20, GxEPD_WHITE);
-            display.display(true);
-            refresh++;
-        } else if (digitalRead(TOP_LEFT) == HIGH) {
-            ESP_LOGI("buttonWatch", "Top Left pressed!");
-            display.fillRoundRect(0, 0, 50, 50, 20, GxEPD_BLACK);
-            display.display(true);
-            vTaskDelay(500);
-            display.fillRoundRect(0, 0, 50, 50, 20, GxEPD_WHITE);
-            display.display(true);
-            refresh++;
-        } else if (digitalRead(TOP_RIGHT) == HIGH) {
-            ESP_LOGI("buttonWatch", "Top Right pressed!");
-            display.fillRoundRect(150, 0, 50, 50, 20, GxEPD_BLACK);
-            display.display(true);
-            vTaskDelay(500);
-            display.fillRoundRect(150, 0, 50, 50, 20, GxEPD_WHITE);
-            display.display(true);
-            refresh++;
-        } else if (refresh >= 10) {
-            ESP_LOGI("buttonWatch", "Performing full refresh of display");
-            display.display(false);
-            refresh = 0;
-        }
+void receiver_task(void *pvParameters) {
+  Message message;
+  while (1) {
+    if (xQueueReceive(queue, &message, portMAX_DELAY)) {
+      ESP_LOGI(TAG, "%s", message.message);
     }
+  }
+}
+
+typedef struct {
+  size_t num_tasks;
+  TaskHandle_t *tasks;
+  TickType_t ticksToRun;
+} MetaTask;
+
+RingbufHandle_t rb;
+
+typedef struct {
+  QUEUE_EVENT e;
+  TickType_t tick;
+  int64_t timestamp;
+} LogMessage;
+
+void tracequeue_function(QUEUE_EVENT e, void *pxQueue) {
+  QueueHandle_t _pxQueue = (QueueHandle_t)pxQueue;
+  switch (e) {
+  case QUEUE_EVENT_RECEIVE: {
+    LogMessage lm = {
+        .e = e, .tick = xTaskGetTickCount(), .timestamp = esp_timer_get_time()};
+    xRingbufferSend(rb, &lm, sizeof(LogMessage), 0);
+    break;
+  }
+  case QUEUE_EVENT_RECEIVE_FAILED:
+    break;
+  }
+}
+
+void print_logmessage(LogMessage lm) {
+  switch (lm.e) {
+  case QUEUE_EVENT_RECEIVE: {
+    ESP_LOGI("DEBUG", "Event: RECEIVE, Tick: %ul, Timestamp: %ul", lm.tick,
+             lm.timestamp);
+    break;
+  }
+  case QUEUE_EVENT_RECEIVE_FAILED:
+    break;
+  }
+}
+
+void destroy_task(void *pvParameters) {
+  MetaTask mTask = *(MetaTask *)pvParameters;
+  vTaskDelay(mTask.ticksToRun);
+  // for (int i = 0; i < mTask.num_tasks; i++) {
+  //     vTaskDelete(mTask.tasks[i]);
+  // }
+  // TODO: Print log buffea
+  void *_currMessage;
+  LogMessage currMessage;
+  size_t recv_size;
+  while (1) {
+    _currMessage = xRingbufferReceive(rb, &recv_size, 0);
+    if (recv_size != sizeof(LogMessage) || _currMessage == NULL)
+      break;
+    currMessage = *(LogMessage *)_currMessage;
+    print_logmessage(currMessage);
+  }
+  while (1) {
+    vTaskDelay(10000);
+  }
 }
 
 extern "C" void app_main() {
-    /* Only priorities from 1-25 (configMAX_PRIORITIES) possible. */
-    /* Initialize the display first. */
-    xTaskCreate(initDisplay, "initDisplay", 4096, NULL, configMAX_PRIORITIES-1, NULL);
-    xTaskCreate(buttonWatch, "watch", 8192, NULL, 1, NULL);
-
-    ESP_LOGI("app_main", "Starting scheduler from app_main()");
-    vTaskStartScheduler();
-    /* vTaskStartScheduler is blocking - this should never be reached */
-    ESP_LOGE("app_main", "insufficient RAM! aborting");
-    abort();
+  ESP_LOGI("app_main", "Starting scheduler from app_main()");
+  queue = xQueueCreate(10, sizeof(Message));
+  rb = xRingbufferCreate(10000, RINGBUF_TYPE_NOSPLIT);
+  TaskHandle_t task_handles[10];
+  MetaTask mTask = {.num_tasks = 2, .tasks = task_handles, .ticksToRun = 3000};
+  xTaskCreate(receiver_task, "receiver_task", 4096, NULL, 5, &task_handles[0]);
+  xTaskCreate(sender_task, "sender_task", 4096, (void *)100, 5,
+              &task_handles[1]);
+  xTaskCreate(destroy_task, "destroy_task", 4096, (void *)&mTask, 10, NULL);
+  vTaskStartScheduler();
+  /* vTaskStartScheduler is blocking - this should never be reached */
+  ESP_LOGE("app_main", "insufficient RAM! aborting");
+  abort();
 }
