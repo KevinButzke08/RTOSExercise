@@ -1,3 +1,4 @@
+#pragma once
 #include "esp_log.h"
 
 typedef enum { QUEUE_EVENT_RECEIVE, QUEUE_EVENT_RECEIVE_FAILED } QUEUE_EVENT;
