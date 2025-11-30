@@ -35,6 +35,12 @@ const char* event_to_string(int event) {
     switch (event) {
         case QUEUE_EVENT_RECEIVE: return "RECEIVE";
         case QUEUE_EVENT_RECEIVE_FAILED: return "RECEIVE_FAILED";
+        case QUEUE_EVENT_RECEIVE_FROM_ISR: return "RECEIVE_ISR";
+        case QUEUE_EVENT_RECEIVE_FROM_ISR_FAILED: return "RECEIVE_ISR_FAILED";
+        case QUEUE_EVENT_SEND: return "SEND";
+        case QUEUE_EVENT_SEND_FAILED: return "SEND_FAILED";
+        case QUEUE_EVENT_SEND_FROM_ISR: return "SEND_ISR";
+        case QUEUE_EVENT_SEND_FROM_ISR_FAILED: return "SEND_ISR_FAILED";
         default: return "UNKNOWN_EVENT";
     }
 }
@@ -64,19 +70,13 @@ extern "C" {
 void tracequeue_function(QUEUE_EVENT e, void *pxQueue) {
   QueueHandle_t _pxQueue = (QueueHandle_t)pxQueue;
   TaskHandle_t curr_task = xTaskGetCurrentTaskHandle();
-  switch (e) {
-  case QUEUE_EVENT_RECEIVE: {
+  
     LogMessage lm = {.event = e,
                      .tick = xTaskGetTickCount(),
                      .timestamp = (uint32_t)esp_timer_get_time(),
                      .taskhandle = curr_task,
                      .generic_data = (char *)_pxQueue};
-    xRingbufferSend(rb, &lm, sizeof(LogMessage), 0);
-    break;
-  }
-  case QUEUE_EVENT_RECEIVE_FAILED:
-    break;
-  }
+    xRingbufferSend(rb, &lm, sizeof(LogMessage), 100);
 }
 
 #ifdef __cplusplus
