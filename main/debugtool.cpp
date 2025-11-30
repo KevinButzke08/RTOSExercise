@@ -28,6 +28,16 @@ void debugtool_task(void *pvParameters) {
     vTaskDelay(10000);
   }
 }
+/**
+ * Helper function to translate the enum events to Strings
+ */
+const char* event_to_string(int event) {
+    switch (event) {
+        case QUEUE_EVENT_RECEIVE: return "RECEIVE";
+        case QUEUE_EVENT_RECEIVE_FAILED: return "RECEIVE_FAILED";
+        default: return "UNKNOWN_EVENT";
+    }
+}
 
 /**
  * Prints out a `LogMessage` struct
@@ -38,18 +48,12 @@ void print_logmessage(LogMessage *_lm) {
   vTaskGetInfo(lm.taskhandle, &xTaskDetails,
                pdTRUE,    // Include the high water mark in xTaskDetails.
                eInvalid); // Include the task state in xTaskDetails.
-  switch (lm.e) {
-  case QUEUE_EVENT_RECEIVE: {
+  
     QueueHandle_t queue_handle = (QueueHandle_t)lm.generic_data;
     ESP_LOGI("DEBUG",
-             "Event: RECEIVE, Task: %s, Tick: %lu, Timestamp: %ld, Queue "
+             "Event: %s, Task: %s, Tick: %lu, Timestamp: %ld, Queue "
              "Handle: %X",
-             xTaskDetails.pcTaskName, lm.tick, lm.timestamp, queue_handle);
-    break;
-  }
-  case QUEUE_EVENT_RECEIVE_FAILED:
-    break;
-  }
+             event_to_string(lm.event),xTaskDetails.pcTaskName, lm.tick, lm.timestamp, queue_handle);
 }
 
 /*********DEFINE TRACE FUNCTIONS HERE******************/
@@ -62,7 +66,7 @@ void tracequeue_function(QUEUE_EVENT e, void *pxQueue) {
   TaskHandle_t curr_task = xTaskGetCurrentTaskHandle();
   switch (e) {
   case QUEUE_EVENT_RECEIVE: {
-    LogMessage lm = {.e = e,
+    LogMessage lm = {.event = e,
                      .tick = xTaskGetTickCount(),
                      .timestamp = (uint32_t)esp_timer_get_time(),
                      .taskhandle = curr_task,

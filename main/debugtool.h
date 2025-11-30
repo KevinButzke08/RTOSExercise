@@ -8,7 +8,7 @@ typedef struct {
 } MetaTask;
 
 typedef struct {
-  QUEUE_EVENT e;
+  QUEUE_EVENT event;
   TickType_t tick;
   uint32_t timestamp;
   TaskHandle_t taskhandle;
