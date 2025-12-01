@@ -7,42 +7,55 @@
 
 RingbufHandle_t rb;
 
-void debugtool_init() { rb = xRingbufferCreate(10000, RINGBUF_TYPE_NOSPLIT); }
+void debugtool_init() {
+  MetaTask mTask = {.num_tasks = 2, .ticksToRun = 3000};
+  rb = xRingbufferCreate(10000, RINGBUF_TYPE_NOSPLIT);
+  xTaskCreate(debugtool_task, "destroy_task", 4096, (void *)&mTask, configMAX_PRIORITIES - 1, NULL);
+}
 
 /**
  * Prints the collected trace messages after a defined timespan
  */
 void debugtool_task(void *pvParameters) {
   MetaTask mTask = *(MetaTask *)pvParameters;
-  vTaskDelay(mTask.ticksToRun);
+  TickType_t t = xTaskGetTickCount();
+  vTaskDelayUntil(&t, mTask.ticksToRun);
+  ESP_LOGI("DEBUGTOOL", "Delay of %d ticks ended", mTask.ticksToRun);
   void *_currMessage;
-  LogMessage currMessage;
   size_t recv_size;
   while (1) {
     _currMessage = xRingbufferReceive(rb, &recv_size, 0);
     if (recv_size != sizeof(LogMessage) || _currMessage == NULL)
       break;
-    print_logmessage((LogMessage*)_currMessage);
+    print_logmessage((LogMessage *)_currMessage);
   }
   while (1) {
-    vTaskDelay(10000);
   }
 }
 /**
  * Helper function to translate the enum events to Strings
  */
-const char* event_to_string(int event) {
-    switch (event) {
-        case QUEUE_EVENT_RECEIVE: return "RECEIVE";
-        case QUEUE_EVENT_RECEIVE_FAILED: return "RECEIVE_FAILED";
-        case QUEUE_EVENT_RECEIVE_FROM_ISR: return "RECEIVE_ISR";
-        case QUEUE_EVENT_RECEIVE_FROM_ISR_FAILED: return "RECEIVE_ISR_FAILED";
-        case QUEUE_EVENT_SEND: return "SEND";
-        case QUEUE_EVENT_SEND_FAILED: return "SEND_FAILED";
-        case QUEUE_EVENT_SEND_FROM_ISR: return "SEND_ISR";
-        case QUEUE_EVENT_SEND_FROM_ISR_FAILED: return "SEND_ISR_FAILED";
-        default: return "UNKNOWN_EVENT";
-    }
+const char *event_to_string(int event) {
+  switch (event) {
+  case QUEUE_EVENT_RECEIVE:
+    return "RECEIVE";
+  case QUEUE_EVENT_RECEIVE_FAILED:
+    return "RECEIVE_FAILED";
+  case QUEUE_EVENT_RECEIVE_FROM_ISR:
+    return "RECEIVE_ISR";
+  case QUEUE_EVENT_RECEIVE_FROM_ISR_FAILED:
+    return "RECEIVE_ISR_FAILED";
+  case QUEUE_EVENT_SEND:
+    return "SEND";
+  case QUEUE_EVENT_SEND_FAILED:
+    return "SEND_FAILED";
+  case QUEUE_EVENT_SEND_FROM_ISR:
+    return "SEND_ISR";
+  case QUEUE_EVENT_SEND_FROM_ISR_FAILED:
+    return "SEND_ISR_FAILED";
+  default:
+    return "UNKNOWN_EVENT";
+  }
 }
 
 /**
@@ -54,12 +67,13 @@ void print_logmessage(LogMessage *_lm) {
   vTaskGetInfo(lm.taskhandle, &xTaskDetails,
                pdTRUE,    // Include the high water mark in xTaskDetails.
                eInvalid); // Include the task state in xTaskDetails.
-  
-    QueueHandle_t queue_handle = (QueueHandle_t)lm.generic_data;
-    ESP_LOGI("DEBUG",
-             "Event: %s, Task: %s, Tick: %lu, Timestamp: %ld, Queue "
-             "Handle: %X",
-             event_to_string(lm.event),xTaskDetails.pcTaskName, lm.tick, lm.timestamp, queue_handle);
+
+  QueueHandle_t queue_handle = (QueueHandle_t)lm.generic_data;
+  ESP_LOGI("DEBUG",
+           "Event: %s, Task: %s, Tick: %lu, Timestamp: %ld, Queue "
+           "Handle: %X",
+           event_to_string(lm.event), xTaskDetails.pcTaskName, lm.tick,
+           lm.timestamp, queue_handle);
 }
 
 /*********DEFINE TRACE FUNCTIONS HERE******************/
@@ -68,15 +82,18 @@ extern "C" {
 #endif
 
 void tracequeue_function(QUEUE_EVENT e, void *pxQueue) {
+  if (rb == NULL) {
+    return;
+  }
   QueueHandle_t _pxQueue = (QueueHandle_t)pxQueue;
   TaskHandle_t curr_task = xTaskGetCurrentTaskHandle();
-  
-    LogMessage lm = {.event = e,
-                     .tick = xTaskGetTickCount(),
-                     .timestamp = (uint32_t)esp_timer_get_time(),
-                     .taskhandle = curr_task,
-                     .generic_data = (char *)_pxQueue};
-    xRingbufferSend(rb, &lm, sizeof(LogMessage), 100);
+
+  LogMessage lm = {.event = e,
+                   .tick = xTaskGetTickCount(),
+                   .timestamp = (uint32_t)esp_timer_get_time(),
+                   .taskhandle = curr_task,
+                   .generic_data = (char *)_pxQueue};
+  xRingbufferSend(rb, &lm, sizeof(LogMessage), 0);
 }
 
 #ifdef __cplusplus

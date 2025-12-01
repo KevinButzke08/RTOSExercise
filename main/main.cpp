@@ -43,12 +43,9 @@ extern "C" void app_main() {
   ESP_LOGI("app_main", "Starting scheduler from app_main()");
   queue = xQueueCreate(10, sizeof(Message));
   debugtool_init();
-  TaskHandle_t task_handles[10];
-  MetaTask mTask = {.num_tasks = 2, .tasks = task_handles, .ticksToRun = 3000};
-  xTaskCreate(receiver_task, "receiver_task", 4096, NULL, 5, &task_handles[0]);
+  xTaskCreate(receiver_task, "receiver_task", 4096, NULL, 5, NULL);
   xTaskCreate(sender_task, "sender_task", 4096, (void *)100, 5,
-              &task_handles[1]);
-  xTaskCreate(debugtool_task, "destroy_task", 4096, (void *)&mTask, 10, NULL);
+              NULL);
   vTaskStartScheduler();
   /* vTaskStartScheduler is blocking - this should never be reached */
   ESP_LOGE("app_main", "insufficient RAM! aborting");
