@@ -25,9 +25,13 @@ void debugtool_task(void *pvParameters) {
   size_t recv_size;
   while (1) {
     _currMessage = xRingbufferReceive(rb, &recv_size, 0);
-    if (recv_size != sizeof(LogMessage) || _currMessage == NULL)
+    if(recv_size == sizeof(LogMessage)) {
+      print_logmessage((LogMessage *)_currMessage);
+    } else if (recv_size == sizeof(IncrementTickMessage)) {
+      print_incrementTickMessage((IncrementTickMessage *)_currMessage);
+    } else {
       break;
-    print_logmessage((LogMessage *)_currMessage);
+    }
   }
   while (1) {
   }
@@ -75,6 +79,15 @@ void print_logmessage(LogMessage *_lm) {
            event_to_string(lm.event), xTaskDetails.pcTaskName, lm.tick,
            lm.timestamp, queue_handle);
 }
+/**
+ * Prints out a `IncrementTickMessage` struct
+ */
+void print_incrementTickMessage(IncrementTickMessage *im) {
+  IncrementTickMessage im = *im;
+  ESP_LOGI("DEBUG",
+           "Event: TICK_INCREMENT, Tick: %lu, New_Tick: %lu, Timestamp: %ld, ",
+            im.tick, im.new_tick, im.timestamp);
+}
 
 /*********DEFINE TRACE FUNCTIONS HERE******************/
 #ifdef __cplusplus
@@ -94,6 +107,15 @@ void tracequeue_function(QUEUE_EVENT e, void *pxQueue) {
                    .taskhandle = curr_task,
                    .generic_data = (char *)_pxQueue};
   xRingbufferSend(rb, &lm, sizeof(LogMessage), 0);
+}
+void tracetick_function(TickType_t xTickCount) {
+  if (rb == NULL) {
+    return;
+  }
+  IncrementTickMessage im = {.tick = xTickCount,
+                             .new_tick = xTickCount + 1,
+                             .timestamp = (uint32_t)esp_timer_get_time()};
+  xRingbufferSend(rb, &im, sizeof(IncrementTickMessage), 0);
 }
 
 #ifdef __cplusplus

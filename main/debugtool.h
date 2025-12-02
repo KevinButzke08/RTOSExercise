@@ -14,6 +14,13 @@ typedef struct {
   void *generic_data;
 } LogMessage;
 
+typedef struct {
+  TickType_t tick;
+  TickType_t new_tick;
+  uint32_t timestamp;
+} IncrementTickMessage;
+
 void print_logmessage(LogMessage *lm);
+void print_incrementTickMessage(IncrementTickMessage *im);
 void debugtool_task(void *pvParameters);
 void debugtool_init();

@@ -13,6 +13,7 @@ typedef enum {
 } QUEUE_EVENT;
 
 void tracequeue_function(QUEUE_EVENT e, void *pxQueue);
+void tracetick_function(TickType_t xTickCount);
 
 #define DEBUG_TAG DRAM_STR("DEBUG")
 #define traceQUEUE_RECEIVE(pxQueue)                                            \
@@ -31,3 +32,5 @@ void tracequeue_function(QUEUE_EVENT e, void *pxQueue);
   tracequeue_function(QUEUE_EVENT_SEND_FROM_ISR, (void *)pxQueue);
 #define traceQUEUE_SEND_FROM_ISR_FAILED(pxQueue)                               \
   tracequeue_function(QUEUE_EVENT_SEND_FROM_ISR_FAILED, (void *)pxQueue);
+#define traceTASK_INCREMENT_TICK(xTickCount)                                   \
+  tracetick_function(xTickCount);
