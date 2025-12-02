@@ -82,8 +82,8 @@ void print_logmessage(LogMessage *_lm) {
 /**
  * Prints out a `IncrementTickMessage` struct
  */
-void print_incrementTickMessage(IncrementTickMessage *im) {
-  IncrementTickMessage im = *im;
+void print_incrementTickMessage(IncrementTickMessage *_im) {
+  IncrementTickMessage im = *_im;
   ESP_LOGI("DEBUG",
            "Event: TICK_INCREMENT, Tick: %lu, New_Tick: %lu, Timestamp: %ld, ",
             im.tick, im.new_tick, im.timestamp);
@@ -108,7 +108,7 @@ void tracequeue_function(QUEUE_EVENT e, void *pxQueue) {
                    .generic_data = (char *)_pxQueue};
   xRingbufferSend(rb, &lm, sizeof(LogMessage), 0);
 }
-void tracetick_function(TickType_t xTickCount) {
+void tracetick_function(uint32_t xTickCount) {
   if (rb == NULL) {
     return;
   }
