@@ -6,10 +6,11 @@
 #include <cstdint>
 
 RingbufHandle_t rb;
+static bool trace_enabled = true;
 
 void debugtool_init() {
-  MetaTask mTask = {.num_tasks = 2, .ticksToRun = 3000};
-  rb = xRingbufferCreate(10000, RINGBUF_TYPE_NOSPLIT);
+  MetaTask mTask = {.num_tasks = 2, .ticksToRun = 1000};
+  rb = xRingbufferCreate(30000, RINGBUF_TYPE_NOSPLIT);
   xTaskCreate(debugtool_task, "destroy_task", 4096, (void *)&mTask, configMAX_PRIORITIES - 1, NULL);
 }
 
@@ -20,18 +21,19 @@ void debugtool_task(void *pvParameters) {
   MetaTask mTask = *(MetaTask *)pvParameters;
   TickType_t t = xTaskGetTickCount();
   vTaskDelayUntil(&t, mTask.ticksToRun);
+  trace_enabled = false;
   ESP_LOGI("DEBUGTOOL", "Delay of %d ticks ended", mTask.ticksToRun);
   void *_currMessage;
   size_t recv_size;
   while (1) {
     _currMessage = xRingbufferReceive(rb, &recv_size, 0);
-    if(recv_size == sizeof(LogMessage)) {
+    if(_currMessage == NULL) {
+      break;
+    } else if(recv_size == sizeof(LogMessage)) {
       print_logmessage((LogMessage *)_currMessage);
     } else if (recv_size == sizeof(IncrementTickMessage)) {
       print_incrementTickMessage((IncrementTickMessage *)_currMessage);
-    } else {
-      break;
-    }
+    } 
   }
   while (1) {
   }
@@ -95,7 +97,7 @@ extern "C" {
 #endif
 
 void tracequeue_function(QUEUE_EVENT e, void *pxQueue) {
-  if (rb == NULL) {
+  if (rb == NULL || trace_enabled == false) {
     return;
   }
   QueueHandle_t _pxQueue = (QueueHandle_t)pxQueue;
@@ -109,7 +111,7 @@ void tracequeue_function(QUEUE_EVENT e, void *pxQueue) {
   xRingbufferSend(rb, &lm, sizeof(LogMessage), 0);
 }
 void tracetick_function(uint32_t xTickCount) {
-  if (rb == NULL) {
+  if (rb == NULL || trace_enabled == false) {
     return;
   }
   IncrementTickMessage im = {.tick = xTickCount,
