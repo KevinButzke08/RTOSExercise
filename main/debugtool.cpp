@@ -9,7 +9,7 @@ RingbufHandle_t rb;
 static bool trace_enabled = true;
 
 void debugtool_init() {
-  MetaTask mTask = {.num_tasks = 2, .ticksToRun = 1000};
+  MetaTask mTask = {.num_tasks = 2, .ticksToRun = 500};
   rb = xRingbufferCreate(30000, RINGBUF_TYPE_NOSPLIT);
   xTaskCreate(debugtool_task, "destroy_task", 4096, (void *)&mTask, configMAX_PRIORITIES - 1, NULL);
 }
@@ -33,15 +33,17 @@ void debugtool_task(void *pvParameters) {
       print_logmessage((LogMessage *)_currMessage);
     } else if (recv_size == sizeof(IncrementTickMessage)) {
       print_incrementTickMessage((IncrementTickMessage *)_currMessage);
-    } 
+    } else if (recv_size == sizeof(TaskMessage)) {
+      print_taskMessage((TaskMessage *)_currMessage);
+    }
   }
   while (1) {
   }
 }
 /**
- * Helper function to translate the enum events to Strings
+ * Helper functions to translate the enum events to Strings
  */
-const char *event_to_string(int event) {
+const char *queue_event_to_string(int event) {
   switch (event) {
   case QUEUE_EVENT_RECEIVE:
     return "RECEIVE";
@@ -60,7 +62,20 @@ const char *event_to_string(int event) {
   case QUEUE_EVENT_SEND_FROM_ISR_FAILED:
     return "SEND_ISR_FAILED";
   default:
-    return "UNKNOWN_EVENT";
+    return "UNKNOWN_QUEUE_EVENT";
+  }
+}
+
+const char *task_event_to_string(int event) {
+  switch (event) {
+  case TASK_EVENT_CREATE:
+    return "TASK_CREATE";
+  case TASK_EVENT_CREATE_FAILED:
+    return "TASK_CREATE_FAILED";
+  case TASK_EVENT_DELETE:
+    return "TASK_DELETE";
+  default:
+    return "UNKNOWN_TASK_EVENT";
   }
 }
 
@@ -78,7 +93,7 @@ void print_logmessage(LogMessage *_lm) {
   ESP_LOGI("DEBUG",
            "Event: %s, Task: %s, Tick: %lu, Timestamp: %ld, Queue "
            "Handle: %X",
-           event_to_string(lm.event), xTaskDetails.pcTaskName, lm.tick,
+           queue_event_to_string(lm.event), xTaskDetails.pcTaskName, lm.tick,
            lm.timestamp, queue_handle);
 }
 /**
@@ -89,6 +104,15 @@ void print_incrementTickMessage(IncrementTickMessage *_im) {
   ESP_LOGI("DEBUG",
            "Event: TICK_INCREMENT, Tick: %lu, New_Tick: %lu, Timestamp: %ld, ",
             im.tick, im.new_tick, im.timestamp);
+}
+/**
+ * Prints out a `TaskMessage` struct
+ */
+void print_taskMessage(TaskMessage *_tm) {
+  TaskMessage tm = *_tm;
+  ESP_LOGI("DEBUG",
+           "Event: %s, Tick: %lu, Timestamp: %ld, TaskHandle: %X, ",
+            task_event_to_string(tm.event), tm.tick, tm.timestamp, tm.taskidentifier);
 }
 
 /*********DEFINE TRACE FUNCTIONS HERE******************/
@@ -119,6 +143,16 @@ void tracetick_function(uint32_t xTickCount) {
                              .timestamp = (uint32_t)esp_timer_get_time()};
   xRingbufferSend(rb, &im, sizeof(IncrementTickMessage), 0);
 }
+void tracetask_function(TASK_EVENT event, void *xTask) {
+  if (rb == NULL || trace_enabled == false) {
+    return;
+  }
+  TaskMessage tm = {.event = event,
+                    .tick = xTaskGetTickCount(),
+                    .timestamp = (uint32_t)esp_timer_get_time(),
+                    .taskidentifier = (TaskHandle_t) xTask};
+  xRingbufferSend(rb, &tm, sizeof(TaskMessage), 0);
+  }
 
 #ifdef __cplusplus
 }

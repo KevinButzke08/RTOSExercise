@@ -20,7 +20,15 @@ typedef struct {
   uint32_t timestamp;
 } IncrementTickMessage;
 
+typedef struct {
+  TASK_EVENT event;
+  TickType_t tick;
+  uint32_t timestamp;
+  void *taskidentifier;
+} TaskMessage;
+
 void print_logmessage(LogMessage *lm);
 void print_incrementTickMessage(IncrementTickMessage *im);
+void print_taskMessage(TaskMessage *_tm);
 void debugtool_task(void *pvParameters);
 void debugtool_init();
