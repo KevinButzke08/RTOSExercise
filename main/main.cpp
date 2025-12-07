@@ -38,14 +38,20 @@ void receiver_task(void *pvParameters) {
   }
 }
 
+// Test Task to see if taskDelay shows on Debugger
+void test_task(void *pvParameters) {
+  while (1){
+    vTaskDelay(150);
+  }
+}
 
 extern "C" void app_main() {
   ESP_LOGI("app_main", "Starting scheduler from app_main()");
   queue = xQueueCreate(10, sizeof(Message));
   debugtool_init();
   xTaskCreate(receiver_task, "receiver_task", 4096, NULL, 5, NULL);
-  xTaskCreate(sender_task, "sender_task", 4096, (void *)100, 5,
-              NULL);
+  xTaskCreate(sender_task, "sender_task", 4096, (void *)100, 5, NULL);
+  xTaskCreate(test_task, "test_task", 4096, NULL, 5, NULL);
   vTaskStartScheduler();
   /* vTaskStartScheduler is blocking - this should never be reached */
   ESP_LOGE("app_main", "insufficient RAM! aborting");

@@ -4,6 +4,7 @@
 #include "esp_timer.h"
 #include "freertos/ringbuf.h"
 #include <cstdint>
+#include <cstring>
 
 RingbufHandle_t rb;
 static bool trace_enabled = true;
@@ -35,6 +36,8 @@ void debugtool_task(void *pvParameters) {
       print_incrementTickMessage((IncrementTickMessage *)_currMessage);
     } else if (recv_size == sizeof(TaskMessage)) {
       print_taskMessage((TaskMessage *)_currMessage);
+    } else if (recv_size == sizeof(TaskDelayMessage)) {
+      print_taskDelayMessage((TaskDelayMessage *)_currMessage);
     }
   }
   while (1) {
@@ -74,6 +77,10 @@ const char *task_event_to_string(int event) {
     return "TASK_CREATE_FAILED";
   case TASK_EVENT_DELETE:
     return "TASK_DELETE";
+  case TASK_EVENT_DELAY:
+    return "TASK_DELAY";
+  case TASK_EVENT_DELAY_UNTIL:
+    return "TASK_DELAY_UNTIL";
   default:
     return "UNKNOWN_TASK_EVENT";
   }
@@ -84,16 +91,10 @@ const char *task_event_to_string(int event) {
  */
 void print_logmessage(LogMessage *_lm) {
   LogMessage lm = *_lm;
-  TaskStatus_t xTaskDetails;
-  vTaskGetInfo(lm.taskhandle, &xTaskDetails,
-               pdTRUE,    // Include the high water mark in xTaskDetails.
-               eInvalid); // Include the task state in xTaskDetails.
-
   QueueHandle_t queue_handle = (QueueHandle_t)lm.generic_data;
   ESP_LOGI("DEBUG",
-           "Event: %s, Task: %s, Tick: %lu, Timestamp: %ld, Queue "
-           "Handle: %X",
-           queue_event_to_string(lm.event), xTaskDetails.pcTaskName, lm.tick,
+           "Event: %s, Task: %s, Tick: %lu, Timestamp: %ld, Queue Handle: %X",
+           queue_event_to_string(lm.event), lm.taskname, lm.tick,
            lm.timestamp, queue_handle);
 }
 /**
@@ -114,7 +115,16 @@ void print_taskMessage(TaskMessage *_tm) {
            "Event: %s, Tick: %lu, Timestamp: %ld, TaskHandle: %X, ",
             task_event_to_string(tm.event), tm.tick, tm.timestamp, tm.taskidentifier);
 }
-
+/**
+ * Prints out a `TaskDelayMessage` struct
+ */
+void print_taskDelayMessage(TaskDelayMessage *_tdm) {
+  TaskDelayMessage tdm = *_tdm;
+  ESP_LOGI("DEBUG",
+            "Event: %s, Tick: %lu, TicksToDelay: %lu, Timestamp: %ld, TaskHandle: %X, ",
+            task_event_to_string(tdm.event), tdm.tick, tdm.tickstodelay, tdm.timestamp, tdm.taskidentifier);
+}
+ 
 /*********DEFINE TRACE FUNCTIONS HERE******************/
 #ifdef __cplusplus
 extern "C" {
@@ -126,12 +136,19 @@ void tracequeue_function(QUEUE_EVENT e, void *pxQueue) {
   }
   QueueHandle_t _pxQueue = (QueueHandle_t)pxQueue;
   TaskHandle_t curr_task = xTaskGetCurrentTaskHandle();
+  const char *name = pcTaskGetName(curr_task);
 
   LogMessage lm = {.event = e,
                    .tick = xTaskGetTickCount(),
                    .timestamp = (uint32_t)esp_timer_get_time(),
                    .taskhandle = curr_task,
-                   .generic_data = (char *)_pxQueue};
+                   .generic_data = (void *)_pxQueue,
+                   .taskname = ""};
+  // Copy task name safely
+  size_t n = strnlen(name ? name : "", configMAX_TASK_NAME_LEN);
+  memcpy(lm.taskname, name ? name : "", n);
+  lm.taskname[n] = '\0';
+
   xRingbufferSend(rb, &lm, sizeof(LogMessage), 0);
 }
 void tracetick_function(uint32_t xTickCount) {
@@ -152,7 +169,24 @@ void tracetask_function(TASK_EVENT event, void *xTask) {
                     .timestamp = (uint32_t)esp_timer_get_time(),
                     .taskidentifier = (TaskHandle_t) xTask};
   xRingbufferSend(rb, &tm, sizeof(TaskMessage), 0);
+}
+
+void tracetaskdelay_function(TASK_EVENT event, TickType_t xTicks, int isAbsolute) {
+  if (rb == NULL || trace_enabled == false) {
+    return;
   }
+  TaskHandle_t th = xTaskGetCurrentTaskHandle();
+  TickType_t delayTicks = xTicks;
+  if(isAbsolute){
+    delayTicks = xTicks - xTaskGetTickCount();
+  }
+  TaskDelayMessage tdm = {.event = event,
+                          .tick = xTaskGetTickCount(),
+                          .tickstodelay = delayTicks,
+                          .timestamp = (uint32_t)esp_timer_get_time(),
+                          .taskidentifier = th};
+  xRingbufferSend(rb, &tdm, sizeof(TaskDelayMessage), 0);
+}
 
 #ifdef __cplusplus
 }

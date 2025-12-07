@@ -14,12 +14,15 @@ typedef enum {
 typedef enum {
   TASK_EVENT_CREATE,
   TASK_EVENT_CREATE_FAILED,
-  TASK_EVENT_DELETE
+  TASK_EVENT_DELETE,
+  TASK_EVENT_DELAY,
+  TASK_EVENT_DELAY_UNTIL
 } TASK_EVENT;
-
+ 
 void tracequeue_function(QUEUE_EVENT e, void *pxQueue);
 void tracetick_function(uint32_t xTickCount);
 void tracetask_function(TASK_EVENT t, void *xTask);
+void tracetaskdelay_function(TASK_EVENT t, uint32_t xTicks, int isAbsolute);
 
 #define DEBUG_TAG DRAM_STR("DEBUG")
 #define traceQUEUE_RECEIVE(pxQueue)                                            \
@@ -46,3 +49,7 @@ void tracetask_function(TASK_EVENT t, void *xTask);
   tracetask_function(TASK_EVENT_CREATE_FAILED, NULL);
 #define traceTASK_DELETE(xTask)                                                \
   tracetask_function(TASK_EVENT_DELETE, (void *)xTask);
+#define traceTASK_DELAY()                                                      \
+  tracetaskdelay_function(TASK_EVENT_DELAY, xTicksToDelay, 0)
+#define traceTASK_DELAY_UNTIL(xTimeToWake)                                                \
+  tracetaskdelay_function(TASK_EVENT_DELAY_UNTIL, xTimeToWake, 1);
