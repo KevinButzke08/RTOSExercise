@@ -81,6 +81,10 @@ const char *task_event_to_string(int event) {
     return "TASK_DELAY";
   case TASK_EVENT_DELAY_UNTIL:
     return "TASK_DELAY_UNTIL";
+  case TASK_EVENT_SWITCHED_IN:
+    return "TASK_EVENT_SWITCHED_IN";
+  case TASK_EVENT_SWITCHED_OUT:
+    return "TASK_EVENT_SWITCHED_OUT";
   default:
     return "UNKNOWN_TASK_EVENT";
   }
@@ -168,6 +172,10 @@ void tracetask_function(TASK_EVENT event, void *xTask) {
                     .tick = xTaskGetTickCount(),
                     .timestamp = (uint32_t)esp_timer_get_time(),
                     .taskidentifier = (TaskHandle_t) xTask};
+  if ((event == TASK_EVENT_SWITCHED_IN) || (event == TASK_EVENT_SWITCHED_OUT)) {
+    // pxCurrentTCB = xTaskGetCurrentTaskHandle(), but pxCurrentTCB not defined in this scope
+    tm.taskidentifier = xTaskGetCurrentTaskHandle();
+  }
   xRingbufferSend(rb, &tm, sizeof(TaskMessage), 0);
 }
 
