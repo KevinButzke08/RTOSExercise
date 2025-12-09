@@ -40,6 +40,7 @@ void debugtool_task(void *pvParameters) {
       print_taskDelayMessage((TaskDelayMessage *)_currMessage);
     }
   }
+  ESP_LOGI("DEBUGTOOL", "END OF TRACE");
   while (1) {
   }
 }
@@ -82,9 +83,9 @@ const char *task_event_to_string(int event) {
   case TASK_EVENT_DELAY_UNTIL:
     return "TASK_DELAY_UNTIL";
   case TASK_EVENT_SWITCHED_IN:
-    return "TASK_EVENT_SWITCHED_IN";
+    return "TASK_SWITCHED_IN";
   case TASK_EVENT_SWITCHED_OUT:
-    return "TASK_EVENT_SWITCHED_OUT";
+    return "TASK_SWITCHED_OUT";
   default:
     return "UNKNOWN_TASK_EVENT";
   }
