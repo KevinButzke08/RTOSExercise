@@ -6,7 +6,15 @@ typedef struct {
   TickType_t ticksToRun;
 } MetaTask;
 
-typedef struct {
+typedef enum {
+  MESSAGE_TYPE_QUEUE,
+  MESSAGE_TYPE_TICK,
+  MESSAGE_TYPE_TASK,
+  MESSAGE_TYPE_TASK_DELAY
+} MESSAGE_TYPE;
+
+typedef struct LogMessage {
+  MESSAGE_TYPE type = MESSAGE_TYPE_QUEUE;
   QUEUE_EVENT event;
   TickType_t tick;
   uint32_t timestamp;
@@ -14,21 +22,24 @@ typedef struct {
   void *generic_data;
   char taskname[configMAX_TASK_NAME_LEN + 1];
 } LogMessage;
- 
-typedef struct {
+
+typedef struct IncrementTickMessage {
+  MESSAGE_TYPE type = MESSAGE_TYPE_TICK;
   TickType_t tick;
   TickType_t new_tick;
   uint32_t timestamp;
 } IncrementTickMessage;
 
-typedef struct {
+typedef struct TaskMessage {
+  MESSAGE_TYPE type = MESSAGE_TYPE_TASK;
   TASK_EVENT event;
   TickType_t tick;
   uint32_t timestamp;
   void *taskidentifier;
 } TaskMessage;
 
-typedef struct {
+typedef struct TaskDelayMessage {
+  MESSAGE_TYPE type = MESSAGE_TYPE_TASK_DELAY;
   TASK_EVENT event;
   TickType_t tick;
   TickType_t tickstodelay;
