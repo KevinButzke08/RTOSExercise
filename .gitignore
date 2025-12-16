@@ -3,3 +3,5 @@ build
 esp
 managed_components
 dependencies.lock
+log_entries.csv
+task_schedule.pdf
