@@ -33,6 +33,7 @@ If you use macOS, see the [Setup macOS](#setup-macOS) section below for required
 - How to use:
   - For just Trace output without persisting and visualizing it, just run `idf.py monitor`
   - For exporting and visualizing run the program by `idf.py monitor | python3 debug_extraction.py` in the root of the repository.
+  - For generating the PDF with the debug output visualized run `python vizualize.py `
 - What modifications were made:
   - Including the `debug_macros.h` where the debug traces are defined. These call the corresponding trace functions which are implemented in the `debugtool.cpp`
   - The Debug extraction `debug_extraction.py` script uses the output from the serial console and is generating the statistics and exports the CSV output.
