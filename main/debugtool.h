@@ -13,7 +13,7 @@ typedef enum {
   MESSAGE_TYPE_TASK_DELAY
 } MESSAGE_TYPE;
 
-typedef struct LogMessage {
+typedef struct QueueMessage {
   MESSAGE_TYPE type = MESSAGE_TYPE_QUEUE;
   QUEUE_EVENT event;
   TickType_t tick;
@@ -21,7 +21,7 @@ typedef struct LogMessage {
   TaskHandle_t taskhandle;
   void *generic_data;
   char taskname[configMAX_TASK_NAME_LEN + 1];
-} LogMessage;
+} QueueMessage;
 
 typedef struct IncrementTickMessage {
   MESSAGE_TYPE type = MESSAGE_TYPE_TICK;
@@ -35,7 +35,8 @@ typedef struct TaskMessage {
   TASK_EVENT event;
   TickType_t tick;
   uint32_t timestamp;
-  void *taskidentifier;
+  TaskHandle_t taskidentifier;
+  char *taskname;
 } TaskMessage;
 
 typedef struct TaskDelayMessage {
@@ -44,10 +45,11 @@ typedef struct TaskDelayMessage {
   TickType_t tick;
   TickType_t tickstodelay;
   uint32_t timestamp;
-  void *taskidentifier;
+  TaskHandle_t taskidentifier;
+  char *taskname;
 } TaskDelayMessage;
 
-void print_logmessage(LogMessage *lm);
+void print_logmessage(QueueMessage *lm);
 void print_incrementTickMessage(IncrementTickMessage *im);
 void print_taskMessage(TaskMessage *_tm);
 void print_taskDelayMessage(TaskDelayMessage *tdm);

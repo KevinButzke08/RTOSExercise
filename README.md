@@ -25,10 +25,15 @@ If you use macOS, see the [Setup macOS](#setup-macOS) section below for required
   `brew install cmake ninja dfu-util`
 - You need a Python 3 interpreter, for example, you can use the bundled Python 3.9 interpreter (on macOS Sonoma). If your bundled Python version is Python 2, [install a Python 3 interpreter](https://docs.espressif.com/projects/esp-idf/en/v5.5.1/esp32/get-started/linux-macos-setup.html#installing-python-3), for example with HomeBrew.
 
-### Debug tool
+## Debug tool
+- Made by: 
+  - Komron Abdulloev - 231579
+  - Kevin Butzke - 225051
+  - Leonhard Holländer - 219520
 - How to use:
   - For just Trace output without persisting and visualizing it, just run `idf.py monitor`
   - For exporting and visualizing run the program by `idf.py monitor | python3 debug_extraction.py` in the root of the repository.
 - What modifications were made:
   - Including the `debug_macros.h` where the debug traces are defined. These call the corresponding trace functions which are implemented in the `debugtool.cpp`
   - The Debug extraction `debug_extraction.py` script uses the output from the serial console and is generating the statistics and exports the CSV output.
+

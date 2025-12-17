@@ -1,5 +1,4 @@
 #include "esp_timer.h"
-#include "freertos/ringbuf.h"
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
@@ -24,6 +23,8 @@ void sender_task(void *pvParameters) {
   Message message;
   sprintf(message.message, "Sender with %d period", period);
   while (1) {
+    int32_t now = esp_timer_get_time(); 
+    while (esp_timer_get_time() < now + (period / 4) * 1000); 
     xQueueSendToBack(queue, &message, 100);
     vTaskDelayUntil(&t, period);
   }
@@ -49,8 +50,9 @@ extern "C" void app_main() {
   ESP_LOGI("app_main", "Starting scheduler from app_main()");
   queue = xQueueCreate(10, sizeof(Message));
   debugtool_init();
-  xTaskCreate(receiver_task, "receiver_task", 4096, NULL, 5, NULL);
+  xTaskCreate(receiver_task, "receiver_task", 4096, NULL, 7, NULL);
   xTaskCreate(sender_task, "sender_task", 4096, (void *)100, 5, NULL);
+  xTaskCreate(sender_task, "sender_task2", 4096, (void *)100, 6, NULL);
   xTaskCreate(test_task, "test_task", 4096, NULL, 5, NULL);
   vTaskStartScheduler();
   /* vTaskStartScheduler is blocking - this should never be reached */

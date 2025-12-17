@@ -12,7 +12,7 @@ static bool trace_enabled = true;
 void debugtool_init() {
   MetaTask mTask = {.num_tasks = 2, .ticksToRun = 500};
   rb = xRingbufferCreate(30000, RINGBUF_TYPE_NOSPLIT);
-  xTaskCreate(debugtool_task, "destroy_task", 4096, (void *)&mTask,
+  xTaskCreate(debugtool_task, "debugtool_task", 4096, (void *)&mTask,
               configMAX_PRIORITIES - 1, NULL);
 }
 
@@ -34,7 +34,7 @@ void debugtool_task(void *pvParameters) {
     MESSAGE_TYPE type = *(MESSAGE_TYPE *)_currMessage;
     switch (type) {
     case MESSAGE_TYPE_QUEUE:
-      print_logmessage((LogMessage *)_currMessage);
+      print_logmessage((QueueMessage *)_currMessage);
       break;
     case MESSAGE_TYPE_TICK:
       print_incrementTickMessage((IncrementTickMessage *)_currMessage);
@@ -101,8 +101,8 @@ const char *task_event_to_string(int event) {
 /**
  * Prints out a `LogMessage` struct
  */
-void print_logmessage(LogMessage *_lm) {
-  LogMessage lm = *_lm;
+void print_logmessage(QueueMessage *_lm) {
+  QueueMessage lm = *_lm;
   QueueHandle_t queue_handle = (QueueHandle_t)lm.generic_data;
   ESP_LOGI("DEBUG",
            "Event: %s, Task: %s, Tick: %lu, Timestamp: %ld, Queue Handle: %X",
@@ -123,9 +123,9 @@ void print_incrementTickMessage(IncrementTickMessage *_im) {
  */
 void print_taskMessage(TaskMessage *_tm) {
   TaskMessage tm = *_tm;
-  ESP_LOGI("DEBUG", "Event: %s, Tick: %lu, Timestamp: %ld, TaskHandle: %X, ",
+  ESP_LOGI("DEBUG", "Event: %s, Tick: %lu, Timestamp: %ld, TaskHandle: %s, ",
            task_event_to_string(tm.event), tm.tick, tm.timestamp,
-           tm.taskidentifier);
+           tm.taskname);
 }
 /**
  * Prints out a `TaskDelayMessage` struct
@@ -134,9 +134,9 @@ void print_taskDelayMessage(TaskDelayMessage *_tdm) {
   TaskDelayMessage tdm = *_tdm;
   ESP_LOGI("DEBUG",
            "Event: %s, Tick: %lu, TicksToDelay: %lu, Timestamp: %ld, "
-           "TaskHandle: %X, ",
+           "TaskHandle: %s, ",
            task_event_to_string(tdm.event), tdm.tick, tdm.tickstodelay,
-           tdm.timestamp, tdm.taskidentifier);
+           tdm.timestamp, tdm.taskname);
 }
 
 /*********DEFINE TRACE FUNCTIONS HERE******************/
@@ -152,7 +152,7 @@ void tracequeue_function(QUEUE_EVENT e, void *pxQueue) {
   TaskHandle_t curr_task = xTaskGetCurrentTaskHandle();
   const char *name = pcTaskGetName(curr_task);
 
-  LogMessage lm = {.event = e,
+  QueueMessage lm = {.event = e,
                    .tick = xTaskGetTickCount(),
                    .timestamp = (uint32_t)esp_timer_get_time(),
                    .taskhandle = curr_task,
@@ -163,7 +163,7 @@ void tracequeue_function(QUEUE_EVENT e, void *pxQueue) {
   memcpy(lm.taskname, name ? name : "", n);
   lm.taskname[n] = '\0';
 
-  xRingbufferSend(rb, &lm, sizeof(LogMessage), 0);
+  xRingbufferSend(rb, &lm, sizeof(QueueMessage), 0);
 }
 void tracetick_function(uint32_t xTickCount) {
   if (rb == NULL || trace_enabled == false) {
@@ -178,6 +178,7 @@ void tracetask_function(TASK_EVENT event, void *xTask) {
   if (rb == NULL || trace_enabled == false) {
     return;
   }
+
   TaskMessage tm = {.event = event,
                     .tick = xTaskGetTickCount(),
                     .timestamp = (uint32_t)esp_timer_get_time(),
@@ -187,6 +188,7 @@ void tracetask_function(TASK_EVENT event, void *xTask) {
     // in this scope
     tm.taskidentifier = xTaskGetCurrentTaskHandle();
   }
+  tm.taskname = pcTaskGetName(tm.taskidentifier);
   xRingbufferSend(rb, &tm, sizeof(TaskMessage), 0);
 }
 
@@ -205,6 +207,7 @@ void tracetaskdelay_function(TASK_EVENT event, TickType_t xTicks,
                           .tickstodelay = delayTicks,
                           .timestamp = (uint32_t)esp_timer_get_time(),
                           .taskidentifier = th};
+  tdm.taskname = pcTaskGetName(tdm.taskidentifier);
   xRingbufferSend(rb, &tdm, sizeof(TaskDelayMessage), 0);
 }
 
