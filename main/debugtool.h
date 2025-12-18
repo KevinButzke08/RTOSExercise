@@ -49,7 +49,7 @@ typedef struct TaskDelayMessage {
   char *taskname;
 } TaskDelayMessage;
 
-void print_logmessage(QueueMessage *lm);
+void print_queuemessage(QueueMessage *lm);
 void print_incrementTickMessage(IncrementTickMessage *im);
 void print_taskMessage(TaskMessage *_tm);
 void print_taskDelayMessage(TaskDelayMessage *tdm);

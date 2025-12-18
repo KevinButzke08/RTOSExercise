@@ -34,7 +34,7 @@ void debugtool_task(void *pvParameters) {
     MESSAGE_TYPE type = *(MESSAGE_TYPE *)_currMessage;
     switch (type) {
     case MESSAGE_TYPE_QUEUE:
-      print_logmessage((QueueMessage *)_currMessage);
+      print_queuemessage((QueueMessage *)_currMessage);
       break;
     case MESSAGE_TYPE_TICK:
       print_incrementTickMessage((IncrementTickMessage *)_currMessage);
@@ -99,9 +99,9 @@ const char *task_event_to_string(int event) {
 }
 
 /**
- * Prints out a `LogMessage` struct
+ * Prints out a `QueueMessage` struct
  */
-void print_logmessage(QueueMessage *_lm) {
+void print_queuemessage(QueueMessage *_lm) {
   QueueMessage lm = *_lm;
   QueueHandle_t queue_handle = (QueueHandle_t)lm.generic_data;
   ESP_LOGI("DEBUG",
