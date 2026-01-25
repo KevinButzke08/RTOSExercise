@@ -21,30 +21,6 @@ typedef struct {
 
 QueueHandle_t queue;
 
-/*
-void sender_task(void *pvParameters) {
-  int period = (uint32_t)pvParameters;
-  TickType_t t = xTaskGetTickCount();
-  Message message;
-  sprintf(message.message, "Sender with %d period", period);
-  while (1) {
-    int32_t now = esp_timer_get_time();
-    while (esp_timer_get_time() < now + (period / 4) * 1000)
-      ;
-    xQueueSendToBack(queue, &message, 100);
-    vTaskDelayUntil(&t, period);
-  }
-}
-
-void receiver_task(void *pvParameters) {
-  Message message;
-  while (1) {
-    if (xQueueReceive(queue, &message, portMAX_DELAY)) {
-      ESP_LOGI(TAG, "%s", message.message);
-    }
-  }
-}
-  */
 QueueHandle_t ready_queue;
 
 void hp_task(void *pvParameters) {
@@ -58,6 +34,7 @@ void hp_task(void *pvParameters) {
 
 void polling_task(void *pvParameters) {
   Aperiodic_request request;
+  TickType_t lastWakeTime = xTaskGetTickCount();
   while (1) {
     if(xQueueReceive(ready_queue, &request, portMAX_DELAY)) {
       ESP_LOGI("APERIODIC:", "Excecuting aperiodic request: %d", request.request_id);
@@ -65,7 +42,7 @@ void polling_task(void *pvParameters) {
       
       }
     }
-    vTaskDelay(100);
+    vTaskDelayUntil(&lastWakeTime, 500);
   }
 }
 
