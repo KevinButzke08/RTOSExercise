@@ -17,73 +17,49 @@ typedef struct {
 
 typedef struct {
   TaskHandle_t owner;
-  QueueHandle_t semaphore;
+  QueueHandle_t handle;
   UBaseType_t initial_priority;
 } PipSemaphore_t;
 
-BaseType_t xPipTake(PipSemaphore_t semaphore, TickType_t xTicksToWait) {
+BaseType_t xPipTake(PipSemaphore_t *semaphore, TickType_t xTicksToWait) {
   // Priority inheritance ....
   const char *name = pcTaskGetName(xTaskGetCurrentTaskHandle());
-  if (semaphore.owner == NULL) {
+  if (semaphore->owner == NULL) {
     ESP_LOGI("SEM", "Taking semaphore, %s", name);
-    semaphore.owner = xTaskGetCurrentTaskHandle();
-    semaphore.initial_priority = uxTaskPriorityGet(semaphore.owner);
+    semaphore->owner = xTaskGetCurrentTaskHandle();
+    semaphore->initial_priority = uxTaskPriorityGet(semaphore->owner);
   } else {
-    ESP_LOGI("SEM", "Increasing Priority");
+    ESP_LOGI("SEM", "Increasing Priority at %lu", (uint32_t)esp_timer_get_time());
     TaskHandle_t curr_task = xTaskGetCurrentTaskHandle();
     UBaseType_t priority = uxTaskPriorityGet(curr_task);
-    if (priority > uxTaskPriorityGet(semaphore.owner)) {
+    if (priority > uxTaskPriorityGet(semaphore->owner)) {
       UBaseType_t new_priority = (priority < configMAX_PRIORITIES - 2)
                                      ? priority + 1
                                      : configMAX_PRIORITIES - 1;
-      vTaskPrioritySet(semaphore.owner, new_priority);
+      vTaskPrioritySet(semaphore->owner, new_priority);
     }
   }
-  return xSemaphoreTake(semaphore.semaphore, xTicksToWait);
+  return xSemaphoreTake(semaphore->handle, xTicksToWait);
 }
 
-BaseType_t xPipGive(PipSemaphore_t semaphore) {
+BaseType_t xPipGive(PipSemaphore_t *semaphore) {
   const char *name = pcTaskGetName(xTaskGetCurrentTaskHandle());
   ESP_LOGI("SEM", "Giving semaphore, %s", name);
-  if (semaphore.owner == xTaskGetCurrentTaskHandle()) {
-    vTaskPrioritySet(semaphore.owner, semaphore.initial_priority);
+  if (semaphore->owner == xTaskGetCurrentTaskHandle()) {
+    vTaskPrioritySet(semaphore->owner, semaphore->initial_priority);
   }
-  semaphore.owner = NULL;
-  return xSemaphoreGive(semaphore.semaphore);
+  semaphore->owner = NULL;
+  return xSemaphoreGive(semaphore->handle);
 }
 
 PipSemaphore_t xPipCreate() {
   PipSemaphore_t semaphore = {.owner = NULL,
-                              .semaphore = xSemaphoreCreateBinary()};
-  xSemaphoreGive(semaphore.semaphore);
+                              .handle = xSemaphoreCreateBinary()};
+  xSemaphoreGive(semaphore.handle);
   return semaphore;
 }
 
 QueueHandle_t queue;
-
-void sender_task(void *pvParameters) {
-  int period = (uint32_t)pvParameters;
-  TickType_t t = xTaskGetTickCount();
-  Message message;
-  sprintf(message.message, "Sender with %d period", period);
-  while (1) {
-    int32_t now = esp_timer_get_time();
-    while (esp_timer_get_time() < now + (period / 4) * 1000)
-      ;
-    xQueueSendToBack(queue, &message, 100);
-    vTaskDelayUntil(&t, period);
-  }
-}
-
-void receiver_task(void *pvParameters) {
-  Message message;
-  while (1) {
-    if (xQueueReceive(queue, &message, portMAX_DELAY)) {
-      ESP_LOGI(TAG, "%s", message.message);
-    }
-  }
-}
-
 PipSemaphore_t sem;
 QueueHandle_t bin_sem;
 
@@ -92,22 +68,21 @@ void test_task(void *pvParameters) {
   int delay = (int)pvParameters;
   vTaskDelay(delay);
   while (1) {
-    xPipTake(sem, portMAX_DELAY);
+    xPipTake(&sem, portMAX_DELAY);
     // xSemaphoreTake(bin_sem, portMAX_DELAY);
     ESP_LOGI("SEM", "Taking");
-    for (int i = 0; i < 2000000; i++) {
+    for (int i = 0; i < 100000; i++) {
     }
-    vTaskDelay(5);
-    xPipGive(sem);
+    xPipGive(&sem);
     // xSemaphoreGive(bin_sem);
-    vTaskDelay(5);
+    vTaskDelay(10);
   }
 }
 
 void inbetween_task(void *pvParameters) {
+  vTaskDelay(15);
   while (1) {
-    vTaskDelay(2);
-    for (int i = 0; i < 200000; i++) {
+    for (int i = 0; i < 100000; i++) {
     }
     vTaskDelay(1);
   }
@@ -118,14 +93,13 @@ extern "C" void app_main() {
   queue = xQueueCreate(10, sizeof(Message));
   sem = xPipCreate();
   bin_sem = xSemaphoreCreateBinary();
-  xSemaphoreGive(bin_sem);
   debugtool_init();
   // xTaskCreate(receiver_task, "receiver_task", 4096, NULL, 7, NULL);
   // xTaskCreate(sender_task, "sender_task", 4096, (void *)100, 5, NULL);
   // xTaskCreate(sender_task, "sender_task2", 4096, (void *)100, 6, NULL);
-  xTaskCreate(test_task, "test_task", 4096, (void *)1, 5, NULL);
-  xTaskCreate(test_task, "test_task2", 4096, (void *)3, 7, NULL);
-  xTaskCreate(inbetween_task, "between", 4096, NULL, 6, NULL);
+  xTaskCreate(test_task, "LowP_task", 4096, (void *)1, 5, NULL);
+  xTaskCreate(test_task, "HighP_task", 4096, (void *)25, 7, NULL);
+  xTaskCreate(inbetween_task, "MidP_task", 4096, NULL, 6, NULL);
   vTaskStartScheduler();
   /* vTaskStartScheduler is blocking - this should never be reached */
   ESP_LOGE("app_main", "insufficient RAM! aborting");
