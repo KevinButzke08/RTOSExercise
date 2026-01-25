@@ -16,51 +16,12 @@ typedef struct {
 } Message;
 
 typedef struct {
-  TaskHandle_t owner;
-  QueueHandle_t semaphore;
-  UBaseType_t initial_priority;
-} PipSemaphore_t;
-
-BaseType_t xPipTake(PipSemaphore_t semaphore, TickType_t xTicksToWait) {
-  // Priority inheritance ....
-  const char *name = pcTaskGetName(xTaskGetCurrentTaskHandle());
-  if (semaphore.owner == NULL) {
-    ESP_LOGI("SEM", "Taking semaphore, %s", name);
-    semaphore.owner = xTaskGetCurrentTaskHandle();
-    semaphore.initial_priority = uxTaskPriorityGet(semaphore.owner);
-  } else {
-    ESP_LOGI("SEM", "Increasing Priority");
-    TaskHandle_t curr_task = xTaskGetCurrentTaskHandle();
-    UBaseType_t priority = uxTaskPriorityGet(curr_task);
-    if (priority > uxTaskPriorityGet(semaphore.owner)) {
-      UBaseType_t new_priority = (priority < configMAX_PRIORITIES - 2)
-                                     ? priority + 1
-                                     : configMAX_PRIORITIES - 1;
-      vTaskPrioritySet(semaphore.owner, new_priority);
-    }
-  }
-  return xSemaphoreTake(semaphore.semaphore, xTicksToWait);
-}
-
-BaseType_t xPipGive(PipSemaphore_t semaphore) {
-  const char *name = pcTaskGetName(xTaskGetCurrentTaskHandle());
-  ESP_LOGI("SEM", "Giving semaphore, %s", name);
-  if (semaphore.owner == xTaskGetCurrentTaskHandle()) {
-    vTaskPrioritySet(semaphore.owner, semaphore.initial_priority);
-  }
-  semaphore.owner = NULL;
-  return xSemaphoreGive(semaphore.semaphore);
-}
-
-PipSemaphore_t xPipCreate() {
-  PipSemaphore_t semaphore = {.owner = NULL,
-                              .semaphore = xSemaphoreCreateBinary()};
-  xSemaphoreGive(semaphore.semaphore);
-  return semaphore;
-}
+  uint32_t request_id;
+} Aperiodic_request;
 
 QueueHandle_t queue;
 
+/*
 void sender_task(void *pvParameters) {
   int period = (uint32_t)pvParameters;
   TickType_t t = xTaskGetTickCount();
@@ -83,49 +44,64 @@ void receiver_task(void *pvParameters) {
     }
   }
 }
+  */
+QueueHandle_t ready_queue;
 
-PipSemaphore_t sem;
-QueueHandle_t bin_sem;
+void hp_task(void *pvParameters) {
+  while(1) {
+    for(int i = 0; i<200000; i++) {
 
-// Test Task to see if taskDelay shows on Debugger
-void test_task(void *pvParameters) {
-  int delay = (int)pvParameters;
-  vTaskDelay(delay);
-  while (1) {
-    xPipTake(sem, portMAX_DELAY);
-    // xSemaphoreTake(bin_sem, portMAX_DELAY);
-    ESP_LOGI("SEM", "Taking");
-    for (int i = 0; i < 2000000; i++) {
     }
-    vTaskDelay(5);
-    xPipGive(sem);
-    // xSemaphoreGive(bin_sem);
-    vTaskDelay(5);
+    vTaskDelay(25);
   }
 }
 
-void inbetween_task(void *pvParameters) {
+void polling_task(void *pvParameters) {
+  Aperiodic_request request;
   while (1) {
-    vTaskDelay(2);
-    for (int i = 0; i < 200000; i++) {
+    if(xQueueReceive(ready_queue, &request, portMAX_DELAY)) {
+      ESP_LOGI("APERIODIC:", "Excecuting aperiodic request: %d", request.request_id);
+      for(int i=0; i<500; i++) {
+      
+      }
     }
-    vTaskDelay(1);
+    vTaskDelay(100);
+  }
+}
+
+void aperiodic_request_generator(void *pvParameters) {
+  uint32_t id=0;
+  while (1) {
+    // Time to wait 10ms - 200ms
+    TickType_t ticksToWait = pdMS_TO_TICKS(10 + (rand() % 190));
+    vTaskDelay(ticksToWait);
+    
+    Aperiodic_request ap_req;
+    ap_req.request_id = ++id;
+    xQueueSendToBack(ready_queue, &ap_req , 100);
+  }
+}
+  void lp_task(void *pvParameters) {
+    while(1) {
+    for(int i = 0; i<10000; i++) {
+
+    }
+    vTaskDelay(15);
   }
 }
 
 extern "C" void app_main() {
   ESP_LOGI("app_main", "Starting scheduler from app_main()");
   queue = xQueueCreate(10, sizeof(Message));
-  sem = xPipCreate();
-  bin_sem = xSemaphoreCreateBinary();
-  xSemaphoreGive(bin_sem);
+  ready_queue = xQueueCreate(10, sizeof(Aperiodic_request));
   debugtool_init();
   // xTaskCreate(receiver_task, "receiver_task", 4096, NULL, 7, NULL);
   // xTaskCreate(sender_task, "sender_task", 4096, (void *)100, 5, NULL);
   // xTaskCreate(sender_task, "sender_task2", 4096, (void *)100, 6, NULL);
-  xTaskCreate(test_task, "test_task", 4096, (void *)1, 5, NULL);
-  xTaskCreate(test_task, "test_task2", 4096, (void *)3, 7, NULL);
-  xTaskCreate(inbetween_task, "between", 4096, NULL, 6, NULL);
+  xTaskCreate(hp_task, "HP_task", 4096, NULL, 6, NULL);
+  xTaskCreate(polling_task, "polling_task", 4096, (void *)1, 5, NULL);
+  xTaskCreate(aperiodic_request_generator, "aperiodic_request_generator", 4096, NULL, 4, NULL);
+  xTaskCreate(lp_task, "LP_task", 4096, NULL, 3, NULL);
   vTaskStartScheduler();
   /* vTaskStartScheduler is blocking - this should never be reached */
   ESP_LOGE("app_main", "insufficient RAM! aborting");
