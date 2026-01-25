@@ -68,13 +68,14 @@ void test_task(void *pvParameters) {
   int delay = (int)pvParameters;
   vTaskDelay(delay);
   while (1) {
-    xPipTake(&sem, portMAX_DELAY);
-    // xSemaphoreTake(bin_sem, portMAX_DELAY);
+    //xPipTake(&sem, portMAX_DELAY);
+    xSemaphoreTake(bin_sem, portMAX_DELAY);
     ESP_LOGI("SEM", "Taking");
     for (int i = 0; i < 100000; i++) {
     }
-    xPipGive(&sem);
-    // xSemaphoreGive(bin_sem);
+    //xPipGive(&sem);
+    xSemaphoreGive(bin_sem);
+    ESP_LOGI("SEM". "Gave back at %lu", (uint32_t)esp_timer_get_time());
     vTaskDelay(10);
   }
 }
@@ -93,10 +94,9 @@ extern "C" void app_main() {
   queue = xQueueCreate(10, sizeof(Message));
   sem = xPipCreate();
   bin_sem = xSemaphoreCreateBinary();
+  xSemaphoreGive(bin_sem);
   debugtool_init();
-  // xTaskCreate(receiver_task, "receiver_task", 4096, NULL, 7, NULL);
-  // xTaskCreate(sender_task, "sender_task", 4096, (void *)100, 5, NULL);
-  // xTaskCreate(sender_task, "sender_task2", 4096, (void *)100, 6, NULL);
+
   xTaskCreate(test_task, "LowP_task", 4096, (void *)1, 5, NULL);
   xTaskCreate(test_task, "HighP_task", 4096, (void *)25, 7, NULL);
   xTaskCreate(inbetween_task, "MidP_task", 4096, NULL, 6, NULL);
