@@ -68,17 +68,21 @@ void test_task(void *pvParameters) {
   int delay = (int)pvParameters;
   vTaskDelay(delay);
   while (1) {
+    ESP_LOGI("SEM", "Attempting to take by: %s at %lu", pcTaskGetName(sem.owner), (uint32_t)esp_timer_get_time())
     //xPipTake(&sem, portMAX_DELAY);
     xSemaphoreTake(bin_sem, portMAX_DELAY);
-    ESP_LOGI("SEM", "Taking");
+    ESP_LOGI("SEM", "Took by: %s at %lu", pcTaskGetName(sem.owner), (uint32_t)esp_timer_get_time())
     for (int i = 0; i < 100000; i++) {
     }
     //xPipGive(&sem);
+    ESP_LOGI("SEM", "Giving back by: %s at %lu", pcTaskGetName(sem.owner), (uint32_t)esp_timer_get_time())
     xSemaphoreGive(bin_sem);
     ESP_LOGI("SEM". "Gave back at %lu", (uint32_t)esp_timer_get_time());
     vTaskDelay(10);
   }
 }
+
+
 
 void inbetween_task(void *pvParameters) {
   vTaskDelay(15);
