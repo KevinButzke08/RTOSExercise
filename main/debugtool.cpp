@@ -10,7 +10,7 @@ RingbufHandle_t rb;
 static bool trace_enabled = true;
 
 void debugtool_init() {
-  MetaTask mTask = {.num_tasks = 2, .ticksToRun = 150};
+  MetaTask mTask = {.num_tasks = 2, .ticksToRun = 50};
   rb = xRingbufferCreate(30000, RINGBUF_TYPE_NOSPLIT);
   xTaskCreate(debugtool_task, "debugtool_task", 4096, (void *)&mTask,
               configMAX_PRIORITIES - 1, NULL);

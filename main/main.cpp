@@ -24,46 +24,54 @@ QueueHandle_t queue;
 QueueHandle_t ready_queue;
 
 void hp_task(void *pvParameters) {
+  TickType_t lastWakeTime = xTaskGetTickCount();
   while(1) {
-    for(int i = 0; i<200000; i++) {
+    for(int i = 0; i<10000; i++) {
 
     }
-    vTaskDelay(25);
+    vTaskDelayUntil(&lastWakeTime, 4);
   }
 }
 
 void polling_task(void *pvParameters) {
   Aperiodic_request request;
   TickType_t lastWakeTime = xTaskGetTickCount();
+  uint8_t capacity;
   while (1) {
-    if(xQueueReceive(ready_queue, &request, portMAX_DELAY)) {
-      ESP_LOGI("APERIODIC:", "Excecuting aperiodic request: %d", request.request_id);
-      for(int i=0; i<500; i++) {
-      
+    // Capacity replenishment
+    capacity = 2;
+    if(uxQueueMessagesWaiting(ready_queue) > 0) {
+      while(xQueueReceive(ready_queue, &request, 0) && capacity > 0) {
+        ESP_LOGI("APERIODIC:", "Excecuting aperiodic request: %d", request.request_id);
+        for(int i=0; i<10000; i++) {
+        // Simulate Aperiodic Execution time
+        }
+        capacity--;
       }
     }
-    vTaskDelayUntil(&lastWakeTime, 500);
+    vTaskDelayUntil(&lastWakeTime, 5);
   }
 }
 
 void aperiodic_request_generator(void *pvParameters) {
   uint32_t id=0;
   while (1) {
-    // Time to wait 10ms - 200ms
-    TickType_t ticksToWait = pdMS_TO_TICKS(10 + (rand() % 190));
+    // Time to wait 10ms - 20ms
+    TickType_t ticksToWait = pdMS_TO_TICKS(10 + (rand() % 20));
     vTaskDelay(ticksToWait);
     
     Aperiodic_request ap_req;
     ap_req.request_id = ++id;
-    xQueueSendToBack(ready_queue, &ap_req , 100);
+    xQueueSendToBack(ready_queue, &ap_req , 0);
   }
 }
   void lp_task(void *pvParameters) {
+    TickType_t lastWakeTime = xTaskGetTickCount();
     while(1) {
-    for(int i = 0; i<10000; i++) {
+    for(int i = 0; i<20000; i++) {
 
     }
-    vTaskDelay(15);
+    vTaskDelayUntil(&lastWakeTime, 6);
   }
 }
 
@@ -72,9 +80,7 @@ extern "C" void app_main() {
   queue = xQueueCreate(10, sizeof(Message));
   ready_queue = xQueueCreate(10, sizeof(Aperiodic_request));
   debugtool_init();
-  // xTaskCreate(receiver_task, "receiver_task", 4096, NULL, 7, NULL);
-  // xTaskCreate(sender_task, "sender_task", 4096, (void *)100, 5, NULL);
-  // xTaskCreate(sender_task, "sender_task2", 4096, (void *)100, 6, NULL);
+
   xTaskCreate(hp_task, "HP_task", 4096, NULL, 6, NULL);
   xTaskCreate(polling_task, "polling_task", 4096, (void *)1, 5, NULL);
   xTaskCreate(aperiodic_request_generator, "aperiodic_request_generator", 4096, NULL, 4, NULL);
