@@ -26,8 +26,10 @@ BaseType_t xPipTake(PipSemaphore_t *semaphore, TickType_t xTicksToWait) {
   TaskHandle_t curr = xTaskGetCurrentTaskHandle();
 
     // Detect if semaphore is already taken + apply PI BEFORE blocking
+    bool entered = false;
     taskENTER_CRITICAL(&pip_mux);
     if (uxSemaphoreGetCount(semaphore->handle) == 0 && semaphore->owner != NULL) {
+        entered = true;
         UBaseType_t curr_prio = uxTaskPriorityGet(curr);
         UBaseType_t owner_prio = uxTaskPriorityGet(semaphore->owner);
 
@@ -37,6 +39,7 @@ BaseType_t xPipTake(PipSemaphore_t *semaphore, TickType_t xTicksToWait) {
         }
     }
     taskEXIT_CRITICAL(&pip_mux);
+    ESP_LOGI("SEM", "Task %s entered critical section: %d", pcTaskGetName(curr), entered);
     // Block on the semaphore
     if (xSemaphoreTake(semaphore->handle, xTicksToWait) != pdTRUE) {
         return pdFALSE;  // timeout or failure
@@ -95,29 +98,32 @@ void receiver_task(void *pvParameters) {
 }
 
 PipSemaphore_t sem;
-QueueHandle_t bin_sem;
+SemaphoreHandle_t bin_sem;
 
 // Test Task to see if taskDelay shows on Debugger
 void test_task(void *pvParameters) {
   int delay = (int)pvParameters;
   vTaskDelay(delay);
   while (1) {
+    ESP_LOGI("SEM", "Attempting to take by: %s at %lu", pcTaskGetName(sem.owner), (uint32_t)esp_timer_get_time());
     xPipTake(&sem, portMAX_DELAY);
-    // xSemaphoreTake(bin_sem, portMAX_DELAY);
-    ESP_LOGI("SEM", "Took by: %s", pcTaskGetName(sem.owner));
-    for (int i = 0; i < 200000; i++) {
+    //xSemaphoreTake(bin_sem, portMAX_DELAY);
+    ESP_LOGI("SEM", "Took by: %s at %lu", pcTaskGetName(sem.owner), (uint32_t)esp_timer_get_time());
+    for (int i = 0; i < 20000; i++) {
     }
-    vTaskDelay(5);
+    ESP_LOGI("SEM", "Giving back by: %s at %lu", pcTaskGetName(sem.owner), (uint32_t)esp_timer_get_time());
+    //vTaskDelay(5);
     xPipGive(&sem);
-    // xSemaphoreGive(bin_sem);
+    //xSemaphoreGive(bin_sem);
     vTaskDelay(5);
   }
 }
 
 void inbetween_task(void *pvParameters) {
+  int delay = (int)pvParameters;
+  vTaskDelay(delay);
   while (1) {
-    vTaskDelay(2);
-    for (int i = 0; i < 200000; i++) {
+    for (int i = 0; i < 20000; i++) {
     }
     vTaskDelay(1);
   }
@@ -128,14 +134,14 @@ extern "C" void app_main() {
   queue = xQueueCreate(10, sizeof(Message));
   sem = xPipCreate();
   //bin_sem = xSemaphoreCreateBinary();
-  //xSemaphoreGive(*bin_sem);
+  //xSemaphoreGive(bin_sem);
   debugtool_init();
   // xTaskCreate(receiver_task, "receiver_task", 4096, NULL, 7, NULL);
   // xTaskCreate(sender_task, "sender_task", 4096, (void *)100, 5, NULL);
   // xTaskCreate(sender_task, "sender_task2", 4096, (void *)100, 6, NULL);
-  xTaskCreate(test_task, "test_task", 4096, (void *)1, 5, NULL);
-  xTaskCreate(test_task, "test_task2", 4096, (void *)10, 7, NULL);
-  xTaskCreate(inbetween_task, "between", 4096, NULL, 6, NULL);
+  xTaskCreate(test_task, "LowP_task", 4096, (void *)1, 5, NULL);
+  xTaskCreate(test_task, "HighP_task", 4096, (void *)10, 7, NULL);
+  xTaskCreate(inbetween_task, "MidP_task", 4096, (void*)4, 6, NULL);
   vTaskStartScheduler();
   /* vTaskStartScheduler is blocking - this should never be reached */
   ESP_LOGE("app_main", "insufficient RAM! aborting");
