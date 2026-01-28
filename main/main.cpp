@@ -27,14 +27,11 @@ BaseType_t xPipTake(PipSemaphore_t *semaphore, TickType_t xTicksToWait) {
   const char *name = pcTaskGetName(xTaskGetCurrentTaskHandle());
   if (res == pdTRUE) {
     // Already got the semaphore -> update the PipSemaphore struct
-    ESP_LOGI("SEM", "Taking semaphore, %s", name);
     semaphore->owner = xTaskGetCurrentTaskHandle();
     semaphore->initial_priority = uxTaskPriorityGet(semaphore->owner);
   } else {
     // We did not get the semaphore
     // Do priority inheritance, then wait for the semaphore
-    ESP_LOGI("SEM", "Increasing Priority at %lu",
-             (uint32_t)esp_timer_get_time());
     TaskHandle_t curr_task = xTaskGetCurrentTaskHandle();
     UBaseType_t priority = uxTaskPriorityGet(curr_task);
     if (priority > uxTaskPriorityGet(semaphore->owner)) {
@@ -47,12 +44,10 @@ BaseType_t xPipTake(PipSemaphore_t *semaphore, TickType_t xTicksToWait) {
     res = xSemaphoreTake(semaphore->handle, xTicksToWait);
     if (res == pdTRUE) {
       // Successfully claimed the semaphore
-      ESP_LOGI("SEM", "Taking semaphore, %s", name);
       semaphore->owner = xTaskGetCurrentTaskHandle();
       semaphore->initial_priority = uxTaskPriorityGet(semaphore->owner);
     } else {
       // Taking semaphore timed out
-      ESP_LOGI("SEM", "Taking semaphore failed, %s", name);
     }
   }
   return res;
@@ -60,13 +55,14 @@ BaseType_t xPipTake(PipSemaphore_t *semaphore, TickType_t xTicksToWait) {
 
 BaseType_t xPipGive(PipSemaphore_t *semaphore) {
   const char *name = pcTaskGetName(xTaskGetCurrentTaskHandle());
-  ESP_LOGI("SEM", "Giving semaphore, %s", name);
   // Reset priority
-  if (semaphore->owner == xTaskGetCurrentTaskHandle()) {
-    vTaskPrioritySet(semaphore->owner, semaphore->initial_priority);
-  }
+  BaseType_t result = xSemaphoreGive(semaphore->handle);
+  TaskHandle_t current_owner = semaphore->owner;
   semaphore->owner = NULL;
-  return xSemaphoreGive(semaphore->handle);
+  if (current_owner == xTaskGetCurrentTaskHandle()) {
+    vTaskPrioritySet(current_owner, semaphore->initial_priority);
+  }
+  return result;
 }
 
 PipSemaphore_t xPipCreate() {
@@ -85,19 +81,12 @@ void test_task(void *pvParameters) {
   int delay = (int)pvParameters;
   vTaskDelay(delay);
   while (1) {
-    // ESP_LOGI("SEM", "Attempting to take by: %s at %lu",
-    // pcTaskGetName(sem.owner), (uint32_t)esp_timer_get_time());
-    xPipTake(&sem, portMAX_DELAY);
-    // xSemaphoreTake(bin_sem, portMAX_DELAY);
-    // ESP_LOGI("SEM", "Took by: %s at %lu", pcTaskGetName(sem.owner),
-    // (uint32_t)esp_timer_get_time());
+    //xPipTake(&sem, portMAX_DELAY);
+     xSemaphoreTake(bin_sem, portMAX_DELAY);
     for (int i = 0; i < 100000; i++) {
     }
-    xPipGive(&sem);
-    // ESP_LOGI("SEM", "Giving back by: %s at %lu", pcTaskGetName(sem.owner),
-    // (uint32_t)esp_timer_get_time());
+    //xPipGive(&sem);
     xSemaphoreGive(bin_sem);
-    // ESP_LOGI("SEM", "Gave back at %lu", (uint32_t)esp_timer_get_time());
     vTaskDelay(10);
   }
 }
