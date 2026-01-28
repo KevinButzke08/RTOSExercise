@@ -56,8 +56,8 @@ void polling_task(void *pvParameters) {
 void aperiodic_request_generator(void *pvParameters) {
   uint32_t id=0;
   while (1) {
-    // Time to wait 10ms - 20ms
-    TickType_t ticksToWait = pdMS_TO_TICKS(10 + (rand() % 20));
+    // Time to wait 3ms - 4ms
+    TickType_t ticksToWait = pdMS_TO_TICKS(3 + (rand() % 4));
     vTaskDelay(ticksToWait);
     
     Aperiodic_request ap_req;
